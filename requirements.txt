@@ -1,0 +1,51 @@
+# =============================================================================
+# Telecom Customer Journey & Churn Root Cause Analysis Platform
+# requirements.txt — unified dependencies for all 8 phases
+#
+# Install with:
+#   pip install -r requirements.txt
+#
+# Python version tested: 3.12
+# Java version required: 11+ (for PySpark) — install OpenJDK if not present
+#   Ubuntu/Debian: sudo apt-get install -y openjdk-11-jdk
+# =============================================================================
+
+# ── Phase 1: Data Generation ──────────────────────────────────────────────────
+faker==40.23.0           # realistic telecom subscriber data generation
+numpy==2.4.4             # random distributions for ARPU, usage volumes
+pandas==3.0.2            # DataFrame construction and CSV/Parquet export
+
+# ── Phase 2: Raw Layer Ingestion ──────────────────────────────────────────────
+pyarrow==24.0.0          # Parquet read/write; also bridges PySpark ↔ pyiceberg
+
+# ── Phase 4: Spark ETL + Iceberg ─────────────────────────────────────────────
+pyspark==3.5.1           # feature engineering, classification, warehouse builds
+pyiceberg==0.11.1        # real Iceberg table writes (SQLite-backed catalog)
+sqlalchemy==2.0.51       # required by pyiceberg's SqlCatalog backend
+
+# ── Phase 5: Star Schema (same Spark + pyiceberg as Phase 4) ─────────────────
+# No additional dependencies — phase5_star_schema_builder.py uses pyspark
+# and pyiceberg already listed above.
+
+# ── Phase 6: Analytics Mart ───────────────────────────────────────────────────
+duckdb==1.5.4            # Presto simulation — queries Parquet directly
+
+# ── Phase 6: Jupyter Exploration Notebook ────────────────────────────────────
+matplotlib==3.10.8       # charts in 06_analytics_mart_exploration.ipynb
+nbformat==5.10.4         # notebook JSON format
+nbclient==0.11.0         # programmatic notebook execution
+jupyter                  # notebook server (version unpinned — any recent stable)
+
+# ── Phase 7: Monitoring (stdlib only — no extra installs needed) ──────────────
+# pipeline_monitor.py uses only: os, sys, json, glob, datetime — all stdlib.
+
+# ── ML churn early-warning (churn_model/) ─────────────────────────────────────────────────────────────────
+scikit-learn==1.9.1      # logistic baseline, calibration, metrics
+lightgbm==4.7.0          # gradient boosting model
+shap==0.52.0             # per-subscriber explanations and reason codes
+mlflow==3.16.1           # experiment tracking + model registry (SQLite backend)
+scipy==1.18.1            # Spearman correlation vs. true hazard, bootstrap stats
+pyyaml==6.0.1            # config.yaml and reason_templates.yaml
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.3.5            # test runner — pip install pytest, then: pytest tests/ -v

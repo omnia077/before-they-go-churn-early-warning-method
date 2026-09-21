@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telecom Churn Root Cause Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* ── Design tokens ── */
+  :root {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --border:   #2a2d3a;
+    --text:     #e2e8f0;
+    --muted:    #8892a4;
+    --active:   #22c55e;
+    --behav:    #6366f1;
+    --network:  #ef4444;
+    --mixed:    #f59e0b;
+    --accent:   #38bdf8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5; padding: 24px;
+  }
+  header { margin-bottom: 28px; }
+  header h1 { font-size: 22px; font-weight: 700; color: var(--accent); }
+  header p  { color: var(--muted); margin-top: 4px; font-size: 13px; }
+
+  /* ── KPI strip ── */
+  .kpi-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 16px; margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px;
+  }
+  .kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase;
+                letter-spacing: .06em; margin-bottom: 6px; }
+  .kpi .value { font-size: 28px; font-weight: 700; }
+  .kpi .sub   { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .kpi.green .value { color: var(--active); }
+  .kpi.red   .value { color: var(--network); }
+  .kpi.blue  .value { color: var(--accent); }
+
+  /* ── Charts grid ── */
+  .charts-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 16px;
+  }
+  .charts-grid.wide { grid-template-columns: 1fr; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px;
+  }
+  .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 16px;
+             color: var(--text); }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; text-align: left;
+       padding: 6px 10px; border-bottom: 1px solid var(--border);
+       text-transform: uppercase; font-size: 11px; letter-spacing: .05em; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+
+  /* ── Stack bar ── */
+  .bar-wrap { margin: 6px 0; }
+  .bar-label { display: flex; justify-content: space-between;
+               margin-bottom: 3px; font-size: 12px; }
+  .bar-track { background: var(--border); border-radius: 4px;
+               height: 8px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 4px; }
+
+  /* ── Footer ── */
+  footer { margin-top: 24px; color: var(--muted); font-size: 12px;
+           border-top: 1px solid var(--border); padding-top: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Telecom Churn Root Cause Analysis</h1>
+  <p>Telecom Churn Platform Portfolio Project · Reference date: 2024-12-31 ·
+     Source: <code>analytics_mart.duckdb</code> (maps to Presto → Superset in production)</p>
+<p style="color:#f59e0b;font-size:12px;margin-top:6px">Root-cause view (rule engine, explains churn after it happens). The predictive early-warning view is <code>churn_early_warning.html</code>. Simulated data. On this data the rule engine labels almost every churner behavioral.</p>
+</header>
+
+<!-- KPI strip -->
+<div class="kpi-row">
+  <div class="kpi blue">
+    <div class="label">Total Customers</div>
+    <div class="value">20,000</div>
+    <div class="sub">Simulation cohort (hidden-process v2 data)</div>
+  </div>
+  <div class="kpi red">
+    <div class="label">Churned</div>
+    <div class="value">3,756</div>
+    <div class="sub">18.78% churned during 2024</div>
+  </div>
+  <div class="kpi green">
+    <div class="label">Active</div>
+    <div class="value">16,244</div>
+    <div class="sub">81.22% retained</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Highest-Risk Region</div>
+    <div class="value" style="font-size:20px;color:var(--mixed)">Nyala</div>
+    <div class="sub">67.29% churn rate</div>
+  </div>
+</div>
+
+<!-- Row 1: Root cause donut + churn by plan -->
+<div class="charts-grid">
+  <div class="card">
+    <h2>Churned Customers by Root Cause</h2>
+    <canvas id="rcChart" height="200"></canvas>
+  </div>
+  <div class="card">
+    <h2>Churn Rate by Region</h2>
+    <canvas id="regionChart" height="200"></canvas>
+  </div>
+</div>
+
+<!-- Row 2: Region table -->
+<div class="card" style="margin-bottom:16px">
+  <h2>Region Detail</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Region</th>
+        <th>Customers</th>
+        <th>Churned</th>
+        <th>Churn Rate</th>
+        <th>Avg ARPU (SDG)</th>
+        <th>Avg Days Silent</th>
+        <th>Rate vs Total</th>
+      </tr>
+    </thead>
+    <tbody id="regionTable"></tbody>
+  </table>
+</div>
+
+<!-- Row 3: Root cause breakdown -->
+<div class="card" style="margin-bottom:16px">
+  <h2>Root Cause Breakdown — Churned Customers Only</h2>
+  <div id="rcBars"></div>
+</div>
+
+<!-- Row 4: Plan comparison -->
+<div class="card" style="margin-bottom:16px">
+  <h2>Churn Rate by Plan Type</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Plan Type</th>
+        <th>Total Customers</th>
+        <th>Churned</th>
+        <th>Churn Rate</th>
+        <th>Avg ARPU (SDG)</th>
+      </tr>
+    </thead>
+    <tbody id="planTable"></tbody>
+  </table>
+</div>
+
+<footer>
+  Data generated by <strong>generation/run_phase1.py</strong> →
+  ingested by <strong>etl/run_phase2.py</strong> →
+  classified by <strong>spark/root_cause_engine.py</strong> →
+  warehoused by <strong>spark/phase5_star_schema_builder.py</strong> →
+  marted by <strong>analytics/build_mart.py</strong>.
+  This dashboard reads <code>data/processed/analytics_mart.duckdb</code>;
+  in production it connects to Presto over Iceberg tables on HDFS.
+</footer>
+
+<script>
+// ── Embedded mart data (generated from analytics_mart.duckdb) ─────────────
+const RC_DATA = [
+  {"root_cause_category": "behavioral", "customer_count": 3723, "pct_of_churned_only": 99.12},
+  {"root_cause_category": "network", "customer_count": 31, "pct_of_churned_only": 0.83},
+  {"root_cause_category": "mixed", "customer_count": 2, "pct_of_churned_only": 0.05}
+];
+
+const REGION_DATA = [
+  {"region_name": "Nyala", "total_customers": 1394, "churned_customers": 938.0, "churn_rate_pct": 67.29, "avg_monthly_arpu_sdg": 1058.59, "avg_days_silent_churned": 182.4},
+  {"region_name": "Kassala", "total_customers": 1552, "churned_customers": 458.0, "churn_rate_pct": 29.51, "avg_monthly_arpu_sdg": 1060.7, "avg_days_silent_churned": 165.8},
+  {"region_name": "El Obeid", "total_customers": 1410, "churned_customers": 295.0, "churn_rate_pct": 20.92, "avg_monthly_arpu_sdg": 1068.87, "avg_days_silent_churned": 227.4},
+  {"region_name": "Atbara", "total_customers": 1205, "churned_customers": 194.0, "churn_rate_pct": 16.1, "avg_monthly_arpu_sdg": 1057.2, "avg_days_silent_churned": 221.8},
+  {"region_name": "Wad Madani", "total_customers": 1885, "churned_customers": 277.0, "churn_rate_pct": 14.69, "avg_monthly_arpu_sdg": 1060.23, "avg_days_silent_churned": 219.7},
+  {"region_name": "Port Sudan", "total_customers": 1571, "churned_customers": 230.0, "churn_rate_pct": 14.64, "avg_monthly_arpu_sdg": 1056.17, "avg_days_silent_churned": 231.2},
+  {"region_name": "Omdurman", "total_customers": 4057, "churned_customers": 516.0, "churn_rate_pct": 12.72, "avg_monthly_arpu_sdg": 1068.93, "avg_days_silent_churned": 217.2},
+  {"region_name": "Khartoum", "total_customers": 6926, "churned_customers": 848.0, "churn_rate_pct": 12.24, "avg_monthly_arpu_sdg": 1066.84, "avg_days_silent_churned": 217.7}
+];
+
+const PLAN_DATA = [
+  {"plan_type": "prepaid", "total_customers": 14360, "churned_customers": 2864.0, "churn_rate_pct": 19.94, "avg_monthly_arpu_sdg": 1067.63},
+  {"plan_type": "postpaid", "total_customers": 5640, "churned_customers": 892.0, "churn_rate_pct": 15.82, "avg_monthly_arpu_sdg": 1055.87}
+];
+
+const COLORS = {
+  behavioral: "#6366f1", network: "#ef4444",
+  mixed: "#f59e0b", active: "#22c55e"
+};
+
+// ── Root Cause Donut ────────────────────────────────────────────────────────
+new Chart(document.getElementById('rcChart'), {
+  type: 'doughnut',
+  data: {
+    labels: RC_DATA.map(d => d.root_cause_category.charAt(0).toUpperCase() + d.root_cause_category.slice(1)),
+    datasets: [{
+      data: RC_DATA.map(d => d.customer_count),
+      backgroundColor: RC_DATA.map(d => COLORS[d.root_cause_category]),
+      borderColor: '#1a1d27', borderWidth: 3,
+    }]
+  },
+  options: {
+    responsive: true, cutout: '65%',
+    plugins: {
+      legend: { position: 'bottom', labels: { color: '#8892a4', padding: 16, font: { size: 12 } } },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` ${ctx.parsed} customers (${RC_DATA[ctx.dataIndex].pct_of_churned_only}% of churned)`
+        }
+      }
+    }
+  }
+});
+
+// ── Region Bar Chart ────────────────────────────────────────────────────────
+new Chart(document.getElementById('regionChart'), {
+  type: 'bar',
+  data: {
+    labels: REGION_DATA.map(d => d.region_name),
+    datasets: [{
+      label: 'Churn Rate %',
+      data: REGION_DATA.map(d => d.churn_rate_pct),
+      backgroundColor: REGION_DATA.map(d =>
+        d.churn_rate_pct >= 16 ? '#ef4444' :
+        d.churn_rate_pct >= 13 ? '#f59e0b' : '#6366f1'
+      ),
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#2a2d3a' }, ticks: { color: '#8892a4', callback: v => v + '%' } },
+      y: { grid: { display: false }, ticks: { color: '#e2e8f0' } }
+    }
+  }
+});
+
+// ── Region Table ────────────────────────────────────────────────────────────
+const tbody = document.getElementById('regionTable');
+REGION_DATA.forEach(r => {
+  const color = r.churn_rate_pct >= 16 ? '#ef4444' : r.churn_rate_pct >= 13 ? '#f59e0b' : '#22c55e';
+  tbody.innerHTML += `
+    <tr>
+      <td><strong>${r.region_name}</strong></td>
+      <td>${r.total_customers.toLocaleString()}</td>
+      <td>${r.churned_customers}</td>
+      <td><span class="badge" style="background:${color}22;color:${color}">${r.churn_rate_pct}%</span></td>
+      <td>${r.avg_monthly_arpu_sdg.toFixed(0)}</td>
+      <td>${r.avg_days_silent_churned} days</td>
+      <td>
+        <div class="bar-track" style="width:120px">
+          <div class="bar-fill" style="width:${r.churn_rate_pct * 4}%;background:${color}"></div>
+        </div>
+      </td>
+    </tr>`;
+});
+
+// ── Root Cause Bars ─────────────────────────────────────────────────────────
+const rcBars = document.getElementById('rcBars');
+RC_DATA.forEach(d => {
+  const color = COLORS[d.root_cause_category];
+  rcBars.innerHTML += `
+    <div class="bar-wrap">
+      <div class="bar-label">
+        <span style="color:${color};font-weight:600">${d.root_cause_category.charAt(0).toUpperCase() + d.root_cause_category.slice(1)}</span>
+        <span>${d.customer_count} customers &nbsp;·&nbsp; ${d.pct_of_churned_only}% of churned</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${d.pct_of_churned_only}%;background:${color}"></div>
+      </div>
+    </div>`;
+});
+
+// ── Plan Table ──────────────────────────────────────────────────────────────
+const planBody = document.getElementById('planTable');
+PLAN_DATA.forEach(p => {
+  planBody.innerHTML += `
+    <tr>
+      <td><strong>${p.plan_type.charAt(0).toUpperCase() + p.plan_type.slice(1)}</strong></td>
+      <td>${p.total_customers.toLocaleString()}</td>
+      <td>${p.churned_customers}</td>
+      <td><span class="badge" style="background:#6366f122;color:#6366f1">${p.churn_rate_pct}%</span></td>
+      <td>${p.avg_monthly_arpu_sdg.toFixed(0)} SDG</td>
+    </tr>`;
+});
+</script>
+</body>
+</html>

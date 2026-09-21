@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Churn Early-Warning Dashboard</title>
+<style>
+  :root { --bg:#0f1117; --surface:#1a1d27; --border:#2a2d3a; --text:#e2e8f0; --muted:#8892a4;
+          --accent:#38bdf8; --red:#ef4444; --green:#22c55e; --amber:#f59e0b; --violet:#6366f1; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:14px; line-height:1.5; padding:24px; }
+  header h1 { font-size:22px; color:var(--accent); } header p { color:var(--muted); font-size:13px; margin:4px 0 16px; }
+  nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  nav button { background:var(--surface); color:var(--muted); border:1px solid var(--border); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px; }
+  nav button.on { color:var(--text); border-color:var(--accent); }
+  .page { display:none; } .page.on { display:block; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-bottom:18px; }
+  .kpi, .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .kpi .l { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .kpi .v { font-size:26px; font-weight:700; margin-top:4px; } .kpi .s { color:var(--muted); font-size:12px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:16px; margin-bottom:16px; }
+  .card h2 { font-size:14px; margin-bottom:12px; } .note { color:var(--muted); font-size:12px; margin-top:8px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { color:var(--muted); text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; }
+  td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .scroll { max-height:520px; overflow:auto; }
+  .row { display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  label { color:var(--muted); font-size:12px; } input[type=range] { width:200px; vertical-align:middle; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .stable { background:#14532d; color:#86efac; } .watch { background:#713f12; color:#fde68a; } .investigate { background:#7f1d1d; color:#fca5a5; }
+  svg text { fill:var(--muted); font-size:11px; } .ar { direction:rtl; text-align:right; }
+  .banner { background:#2a2110; border:1px solid #6b4e12; color:#fde68a; border-radius:8px; padding:8px 12px; font-size:12px; margin-bottom:16px; }
+  img { max-width:100%; border-radius:8px; background:#fff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Churn Early-Warning and Retention Budget</h1>
+  <p id="sub"></p>
+</header>
+<div class="banner">All figures come from a simulated subscriber base. They demonstrate the method, not real-world performance.
+Save rate, contact cost and horizon are labelled assumptions.</div>
+<nav id="nav"></nav>
+
+<div id="overview" class="page on"></div>
+<div id="risk" class="page"></div>
+<div id="budget" class="page"></div>
+<div id="perf" class="page"></div>
+<div id="network" class="page"></div>
+<div id="monitor" class="page"></div>
+
+<script>
+const D = /*__DATA__*/null;
+const $ = id => document.getElementById(id);
+const fmt = (x, d=0) => Number(x).toLocaleString('en-US', {maximumFractionDigits:d, minimumFractionDigits:d});
+const pct = (x, d=1) => (x*100).toFixed(d) + '%';
+const MONTH = {2:'Mar',3:'Apr',4:'May',5:'Jun',6:'Jul',7:'Aug',8:'Sep',9:'Oct',10:'Nov'};
+const kpi = (l, v, s='') => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+
+// ---- tiny SVG line chart
+function lineChart(series, opt) {
+  const W=640, H=280, m={l:56,r:16,t:14,b:36};
+  const xs = series.flatMap(s => s.x), ys = series.flatMap(s => s.y);
+  const x0=Math.min(...xs), x1=Math.max(...xs), y0=opt.y0 ?? Math.min(0,...ys), y1=Math.max(...ys)*1.08;
+  const X = v => m.l + (v-x0)/(x1-x0||1)*(W-m.l-m.r), Y = v => H-m.b - (v-y0)/(y1-y0||1)*(H-m.t-m.b);
+  let g = '';
+  for (let i=0;i<=4;i++){ const v=y0+(y1-y0)*i/4; g += `<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="#2a2d3a"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${opt.yfmt(v)}</text>`; }
+  for (let i=0;i<=4;i++){ const v=x0+(x1-x0)*i/4; g += `<text x="${X(v)}" y="${H-m.b+16}" text-anchor="middle">${opt.xfmt(v)}</text>`; }
+  const lines = series.map(s => `<polyline fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5 4"':''} points="${s.x.map((v,i)=>X(v)+','+Y(s.y[i])).join(' ')}"/>`).join('');
+  const leg = series.map((s,i)=>`<text x="${m.l+8}" y="${m.t+12+i*14}" style="fill:${s.color}">— ${s.name}</text>`).join('');
+  let extra = opt.vline!=null ? `<line x1="${X(opt.vline)}" x2="${X(opt.vline)}" y1="${m.t}" y2="${H-m.b}" stroke="#8892a4" stroke-dasharray="2 3"/>` : '';
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${g}${lines}${extra}${leg}<text x="${W/2}" y="${H-2}" text-anchor="middle">${opt.xlabel}</text></svg>`;
+}
+
+// ---- pages
+function overview() {
+  const B=D.budget, S=D.scoring, E=D.eval, prim=D.answer.model;
+  $('sub').textContent = `Model: ${prim} (calibrated) · scoring cutoff ${S.as_of} · ${fmt(S.rows_scored)} active subscribers scored · hashed IDs only`;
+  const t = D.trend;
+  $('overview').innerHTML = `<div class="kpis">
+    ${kpi('Subscribers scored', fmt(S.rows_scored), 'cutoff '+S.as_of)}
+    ${kpi('Test PR-AUC', E[prim].pr_auc.toFixed(3), 'base rate '+pct(E._meta.base_rate,2)+', oracle '+E['ORACLE true hazard'].pr_auc.toFixed(3))}
+    ${kpi('Top-10% lift', E[prim].top10_lift.toFixed(2)+'x', 'top decile captures '+pct(B.top10pct_capture_rate,0)+' of Nov churners')}
+    ${kpi('Recommended contacts', fmt(B.recommended_contacts_by_ev), pct(B.recommended_share_by_ev,1)+' of base (Nov cutoff)')}
+  </div>
+  <div class="grid2"><div class="card"><h2>Monthly churn rate by cutoff (label = next month)</h2>
+    ${lineChart([{name:'observed churn rate',color:'#ef4444',x:t.map(r=>r.cutoff),y:t.map(r=>r.rate)}],{yfmt:v=>pct(v,1),xfmt:v=>MONTH[Math.round(v)]||'',xlabel:'cutoff month',y0:0})}
+    <p class="note">Sep-Nov are test months. The Nyala (Jun-Aug) and Kassala (Sep-Oct) outages are planted in the simulation.</p></div>
+  <div class="card"><h2>Model card in one glance</h2><table>
+    <tr><td>Train / validation / test</td><td>Mar-Jul / Aug / Sep-Nov cutoffs</td></tr>
+    <tr><td>Features</td><td>22 as-of features, no persona, no region one-hot</td></tr>
+    <tr><td>Correlation with true hazard</td><td>Spearman ${D.answer.spearman_pred_vs_true_hazard.toFixed(2)}</td></tr>
+    <tr><td>Share of oracle PR-AUC</td><td>${pct(D.answer.oracle_gap.share_of_oracle_pr_auc,0)}</td></tr>
+    <tr><td>Score drift (PSI)</td><td><span class="pill ${S.drift.score_status}">${S.drift.score_psi.toFixed(3)} ${S.drift.score_status}</span></td></tr></table></div></div>`;
+}
+
+let lang='en';
+function risk() {
+  const rows = D.risk.slice(0,100).map(r => {
+    const rs = [1,2,3].map(k => r['reason_'+k+'_'+lang] ? `<div class="${lang==='ar'?'ar':''}">${k}. ${r['reason_'+k+'_'+lang]}</div>` : '').join('');
+    return `<tr><td><code>${r.sub_hash}</code></td><td>${r.region}</td><td>${pct(r.probability,1)}</td><td>${r.decile}</td><td>${fmt(r.expected_value_sdg)}</td><td>${rs}</td></tr>`; }).join('');
+  $('risk').innerHTML = `<div class="card"><div class="row"><h2 style="margin:0">Highest-risk subscribers (top 100 of ${fmt(D.scoring.explained_rows)} explained)</h2>
+    <button onclick="lang='${lang==='en'?'ar':'en'}';risk()" style="background:#1a1d27;color:#e2e8f0;border:1px solid #2a2d3a;border-radius:6px;padding:6px 12px;cursor:pointer">Language: ${lang==='en'?'English → العربية':'العربية → English'}</button></div>
+    <div class="scroll"><table><tr><th>Subscriber (hash)</th><th>Region</th><th>Probability</th><th>Decile</th><th>Exp. value SDG</th><th>Top reasons</th></tr>${rows}</table></div>
+    <p class="note">Reasons show what the model uses, not what causes churn. Retention use only.</p></div>`;
+}
+
+function budget() {
+  const W=D.whatif, n=W.p.length;
+  $('budget').innerHTML = `<div class="card"><h2>Budget curve (Nov cutoff, ${fmt(n)} subscribers)</h2><div class="row">
+    <label>Save rate <b id="sv">${pct(D.assumptions.save_rate,0)}</b> <input id="sr" type="range" min="0.05" max="0.5" step="0.01" value="${D.assumptions.save_rate}"></label>
+    <label>Cost per contact (SDG) <b id="cv">${D.assumptions.cost_per_contact_sdg}</b> <input id="cc" type="range" min="5" max="100" step="1" value="${D.assumptions.cost_per_contact_sdg}"></label>
+    <label>Horizon (months) <b id="hv">${D.assumptions.value_horizon_months}</b> <input id="hh" type="range" min="1" max="12" step="1" value="${D.assumptions.value_horizon_months}"></label></div>
+    <div id="bchart"></div><div class="kpis" id="bk"></div>
+    <p class="note">Expected net = p × value × save rate − cost. Realised net uses the simulated outcomes for the same contacted list. Value = monthly spend × horizon; not multiplied by survival probability.</p></div>`;
+  const draw = () => {
+    const sr=+$('sr').value, cc=+$('cc').value, hh=+$('hh').value;
+    $('sv').textContent=pct(sr,0); $('cv').textContent=cc; $('hv').textContent=hh;
+    const base = D.assumptions.value_horizon_months;
+    const v = W.value.map(x => x/base*hh);
+    const ev = W.p.map((p,i)=>p*v[i]*sr-cc);
+    const curve = (score) => { const idx=[...Array(n).keys()].sort((a,b)=>score[b]-score[a]); let e=0,r=0; const ex=[],re=[];
+      for (const i of idx){ e+=ev[i]; r+=W.y[i]*v[i]*sr-cc; ex.push(e); re.push(r);} return {ex,re}; };
+    const byEv=curve(ev), byP=curve(W.p);
+    const k = a => a.ex.indexOf(Math.max(...a.ex));
+    const kE=k(byEv), kP=k(byP), step=Math.ceil(n/400), xs=[...Array(n).keys()].filter(i=>i%step===0);
+    $('bchart').innerHTML = lineChart([
+      {name:'ranked by expected value',color:'#ef4444',x:xs,y:xs.map(i=>byEv.ex[i])},
+      {name:'ranked by probability',color:'#38bdf8',dash:1,x:xs,y:xs.map(i=>byP.ex[i])},
+      {name:'realised (EV rank)',color:'#22c55e',x:xs,y:xs.map(i=>byEv.re[i])}],
+      {yfmt:v=>fmt(v/1000)+'k',xfmt:v=>fmt(v),xlabel:'subscribers contacted',y0:Math.min(0,...byEv.ex), vline:kE});
+    $('bk').innerHTML = kpi('Optimum contacts (EV rank)', fmt(kE+1), pct((kE+1)/n,1)+' of base')
+      + kpi('Expected net at optimum', fmt(byEv.ex[kE])+' SDG', 'realised '+fmt(byEv.re[kE])+' SDG')
+      + kpi('Same budget, prob. rank', fmt(byP.ex[kE])+' SDG', 'realised '+fmt(byP.re[kE])+' SDG')
+      + kpi('Probability-rank optimum', fmt(kP+1), fmt(byP.ex[kP])+' SDG expected');
+  };
+  ['sr','cc','hh'].forEach(id=>$(id).addEventListener('input',draw)); draw();
+}
+
+function perf() {
+  const E=D.eval, names=Object.keys(E).filter(k=>!k.startsWith('_'));
+  const rows = names.map(n => { const r=E[n], ci=r.pr_auc_ci95?` (${r.pr_auc_ci95[0].toFixed(3)}-${r.pr_auc_ci95[1].toFixed(3)})`:'';
+    return `<tr><td>${n}</td><td>${r.pr_auc.toFixed(3)}${ci}</td><td>${r.roc_auc.toFixed(3)}</td><td>${r.top10_lift.toFixed(2)}</td><td>${r.precision_at_thr!=null?pct(r.precision_at_thr,1):'-'}</td><td>${r.recall_at_thr!=null?pct(r.recall_at_thr,1):'-'}</td><td>${r.brier!=null?r.brier.toFixed(4):'-'}</td></tr>`; }).join('');
+  $('perf').innerHTML = `<div class="card"><h2>Out-of-time results, test cutoffs Sep-Nov (${fmt(E._meta.test_rows)} rows, ${E._meta.test_positives} churners)</h2>
+    <table><tr><th>Model</th><th>PR-AUC (95% CI)</th><th>ROC-AUC</th><th>Top-10% lift</th><th>Precision @10%</th><th>Recall @10%</th><th>Brier</th></tr>${rows}</table>
+    <p class="note">Gradient boosting roughly ties logistic because the planted signal is close to linear. The rule heuristic is a reference only. Oracle uses the true hazard (validation only).</p></div>
+    <div class="grid2" style="margin-top:16px"><div class="card"><h2>Reliability</h2><img src="../docs/figures/reliability.png" alt="reliability"></div>
+    <div class="card"><h2>Cumulative gains</h2><img src="../docs/figures/gains.png" alt="gains"></div>
+    <div class="card"><h2>SHAP summary</h2><img src="../docs/figures/shap_summary.png" alt="shap"></div></div>`;
+}
+
+function network() {
+  const last = Math.max(...D.network.map(r=>r.cutoff));
+  const rows = D.network.filter(r=>r.cutoff===last).sort((a,b)=>b.network_attributable_ev_sdg-a.network_attributable_ev_sdg)
+    .map((r,i)=>`<tr><td>${i+1}</td><td>${r.region}</td><td>${r.at_risk}</td><td>${pct(r.network_share,1)}</td><td>${fmt(r.network_attributable_ev_sdg)}</td></tr>`).join('');
+  const v = Object.entries(D.network_validation).map(([k,o])=>`<tr><td>${k}</td><td>${o.outage_months}</td><td>${pct(o.mean_network_share_during_outage,1)}</td><td>${pct(o.mean_network_share_other_months,1)}</td><td>${o.rank_by_network_ev_during_outage.join(', ')}</td></tr>`).join('');
+  $('network').innerHTML = `<div class="grid2"><div class="card"><h2>NOC list, cutoff ${MONTH[last]} (ranked by network-attributable expected value)</h2>
+    <table><tr><th>#</th><th>Region</th><th>At-risk</th><th>Network share</th><th>Network EV (SDG)</th></tr>${rows}</table></div>
+    <div class="card"><h2>Validation against planted outages</h2><table><tr><th>Region</th><th>Outage</th><th>Share (outage)</th><th>Share (other)</th><th>Rank per outage cutoff</th></tr>${v}</table>
+    <p class="note">Only ticket signals exist here; cell-level KPIs would be the next step. Rank 1 = highest network-attributable value.</p>
+    <img src="../docs/figures/network_handoff.png" alt="heatmap" style="margin-top:10px"></div></div>`;
+}
+
+function monitor() {
+  const S=D.scoring, f=Object.entries(S.drift.feature_psi).map(([k,v])=>`<tr><td>${k}</td><td>${v.toFixed(3)}</td><td><span class="pill ${S.drift.feature_status[k]}">${S.drift.feature_status[k]}</span></td></tr>`).join('');
+  $('monitor').innerHTML = `<div class="grid2"><div class="card"><h2>Drift check, cutoff ${S.as_of}</h2>
+    <p>Score PSI <b>${S.drift.score_psi.toFixed(3)}</b> <span class="pill ${S.drift.score_status}">${S.drift.score_status}</span> · retrain trigger: <b>${S.drift.retrain_trigger?'YES':'no'}</b></p>
+    <table style="margin-top:10px"><tr><th>Top feature</th><th>PSI</th><th>Status</th></tr>${f}</table>
+    <p class="note">PSI &lt; 0.1 stable, 0.1-0.25 watch, &gt; 0.25 investigate. tenure_days is excluded because it ages by construction.</p></div>
+    <div class="card"><h2>Pipeline</h2><table><tr><td>Model source</td><td>${S.model_source}</td></tr><tr><td>Rows scored</td><td>${fmt(S.rows_scored)}</td></tr>
+    <tr><td>Dropped as inactive</td><td>${fmt(S.dropped_inactive)}</td></tr><tr><td>Rows in mart table</td><td>${fmt(S.rows_in_mart_table)}</td></tr>
+    <tr><td>Input null rate (max)</td><td>${pct(S.validation.max_null_rate,2)}</td></tr></table></div></div>`;
+}
+
+const pages = {overview:['Overview',overview], risk:['Risk list',risk], budget:['Budget curve',budget], perf:['Model performance',perf], network:['Network hand-off',network], monitor:['Monitoring',monitor]};
+$('nav').innerHTML = Object.entries(pages).map(([k,[t]])=>`<button data-p="${k}">${t}</button>`).join('');
+function show(k){ document.querySelectorAll('.page').forEach(e=>e.classList.toggle('on',e.id===k)); document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.p===k)); pages[k][1](); }
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.p));
+show('overview');
+</script>
+</body>
+</html>

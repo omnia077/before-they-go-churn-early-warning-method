@@ -1,0 +1,24 @@
+# churn_model configuration - every assumption and seed lives here.
+seed: 42
+
+paths:
+  raw: src/data/raw                      # Phase 2 output (labels/persona already dropped)
+  ground_truth: src/data/ground_truth    # label + validation only, never features
+  outputs: src/data/ml                   # panel, scores, model artifacts
+
+time_design:                # month-end cutoff indices, 0 = Jan 2024
+  train: [2, 3, 4, 5, 6]    # Mar-Jul, labels Apr-Aug
+  validation: [7]           # Aug, labels Sep
+  test: [8, 9, 10]          # Sep-Nov, labels Oct-Dec (Kassala outage inside)
+
+features:
+  data_start: "2024-01-01"
+  fill_days_since_use: 120
+  fill_days_since_recharge: 200
+  default_mean_recharge_gap_days: 30
+  region_active_lookback_days: 90
+
+decision:                   # LABELLED ASSUMPTIONS, not findings
+  save_rate: 0.20
+  cost_per_contact_sdg: 20
+  value_horizon_months: 6

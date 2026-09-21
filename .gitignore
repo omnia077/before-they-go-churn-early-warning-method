@@ -1,0 +1,37 @@
+# Generated pipeline data — produced at runtime, not committed
+data/
+data_v1/
+data_v2/
+
+# Monitoring runtime reports
+src/07_monitoring/alerts_*.json
+src/07_monitoring/pipeline_health_report_*.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.Python
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# DuckDB lock file
+*.duckdb.wal
+
+# pytest cache
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Local secrets
+.churn_salt
+.env
+
+# MLflow artifacts
+mlruns/

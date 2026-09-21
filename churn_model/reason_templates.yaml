@@ -1,0 +1,42 @@
+# Reason-code templates (English / Arabic). Each string stays under 12 words.
+# Placeholders are filled by churn_model/reasons.py.
+# Arabic phrasing that needs number agreement (dual/plural) is filled by helpers, and
+# counts otherwise use agreement-free forms. TODO(native review): check every Arabic string.
+#
+# Reason groups mirror churn_model/explain.py FEATURE_GROUPS, so codes never repeat.
+
+usage_decline:
+  en: "Usage fell {x}% in the last 30 days"
+  ar: "انخفض الاستخدام بنسبة {x}٪ خلال آخر 30 يوماً"
+  fallback_en: "Low usage in the last 30 days"
+  fallback_ar: "استخدام منخفض خلال آخر 30 يوماً"
+
+recharge_gap:
+  en: "No recharge for {n} days"
+  ar: "لم يقم بالتعبئة منذ {days_ar}"
+  fallback_en: "Irregular recharging pattern"
+  fallback_ar: "نمط تعبئة غير منتظم"
+
+network_complaints:
+  en: "{n} network complaint(s) in the last 30 days"
+  ar: "عدد شكاوى الشبكة خلال آخر 30 يوماً: {n}"
+  fallback_en: "High network complaint rate in the region"
+  fallback_ar: "ارتفاع شكاوى الشبكة في منطقة المشترك"
+
+unpaid_bills:
+  en: "{n} unpaid bill(s) in the last 3 months"
+  ar: "عدد الفواتير غير المسددة خلال آخر 3 أشهر: {n}"
+  fallback_en: "Late or shrinking bills in the last 3 months"
+  fallback_ar: "فواتير متأخرة أو متراجعة خلال آخر 3 أشهر"
+
+new_subscriber:
+  en: "New subscriber (under 90 days)"
+  ar: "مشترك جديد (أقل من 90 يوماً)"
+  fallback_en: "Short time as a subscriber"
+  fallback_ar: "مدة اشتراك قصيرة"
+
+inactivity:
+  en: "No activity for {n} days"
+  ar: "لا يوجد أي نشاط منذ {days_ar}"
+  fallback_en: "Reduced activity"
+  fallback_ar: "نشاط منخفض"
