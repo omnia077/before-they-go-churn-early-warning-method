@@ -6,7 +6,7 @@ End-to-end churn early-warning system. Predicts who leaves next month, explains 
 
 ## The Problem
 
-Every telecom knows customers churn. The expensive mistake is finding out afterwards. A rule engine can say why a subscriber left; it cannot say who leaves next month, and a retention budget is always smaller than the subscriber base. This project scores every active prepaid and postpaid subscriber's chance of leaving next month, explains the score, and answers the question a retention director actually asks: **should we spend this month's budget on N subscribers, and which ones?**
+Every telecom knows customers churn. The expensive mistake is finding out afterwards. A rule engine can say why a subscriber left; it cannot say who leaves next month, and a retention budget is always smaller than the subscriber base. This project scores every active prepaid and postpaid subscriber's chance of leaving next month, explains the score, and answers the question : **should we spend this month's budget on N subscribers, and which ones?**
 
 ## Objective
 
@@ -123,14 +123,6 @@ open dashboard/churn_early_warning.html   # Windows: just double-click the file
 - Java 11+ (required for PySpark) — download from adoptium.net
 - On Windows, `winutils.exe` under `C:\hadoop\bin` (see `run_pipeline.ps1`)
 - See `requirements.txt` for the full package list
-
-## Limitations
-
-- All results are on simulated data; the pilot in `docs/pilot_design.md` is the step that would prove impact.
-- Save rate, contact cost and value horizon are labelled assumptions, not findings.
-- SHAP shows what the model uses, not what causes churn.
-- The label is a proxy for inactivity, and only ticket-based network signals exist (no cell-level KPIs).
-- The Arabic reason templates and memo need a native review.
 
 ## 📚 Documentation
 
