@@ -47,8 +47,6 @@ On top of that, the model layer works in five steps: **as-of features** per subs
 - **Iceberg over plain Parquet** — snapshot isolation, time travel, and idempotent overwrites. An Airflow retry cannot silently duplicate rows.
 - **Two fact tables, not one** — churn snapshots and network tickets have different grains. Merging them silently inflates every aggregate.
 
-Full rationale in `docs/architecture_decisions.md` and `docs/model_card.md`.
-
 ## What It Found
 
 Out-of-time test on Sep-Nov, 988 churners in 50,604 subscriber-months (1.95% base rate):
@@ -90,7 +88,7 @@ before-they-go/
 │   └── 07_monitoring/            pipeline health monitor
 ├── notebooks/                  → 01_eda_churn_panel.ipynb
 ├── dashboard/                  → churn_early_warning.html, churn_dashboard.html
-├── docs/                       → model card, pilot design, director memo, and more
+├── docs/                       → model card, pilot design, and more
 ├── tests/                      → data-platform output tests
 └── requirements.txt  run_pipeline.ps1  .env.example  LICENSE
 ```
