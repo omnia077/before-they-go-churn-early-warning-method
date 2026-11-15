@@ -124,14 +124,6 @@ open dashboard/churn_early_warning.html   # Windows: just double-click the file
 - On Windows, `winutils.exe` under `C:\hadoop\bin` (see `run_pipeline.ps1`)
 - See `requirements.txt` for the full package list
 
-## 📚 Documentation
-
-- [Model card](docs/model_card.md) — data, method, calibration, fairness, monitoring
-- [Director memo](docs/director_memo.md) — the recommendation in English and Arabic
-- [Pilot design](docs/pilot_design.md) — how to prove it works, with sample sizes
-- [Fairness audit](docs/fairness_audit.md) · [Feature dictionary](docs/feature_dictionary.md) · [Results](docs/results.md)
-- [BI data requirements](docs/bi_data_requirements.md) · [Architecture decisions](docs/architecture_decisions.md)
-
 ## License
 
 MIT, see `LICENSE`.
